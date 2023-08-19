@@ -2,54 +2,112 @@ package com.mclarkdev.tools.libloggelf;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.json.JSONObject;
 
+import com.mclarkdev.tools.liblog.LibLog;
+import com.mclarkdev.tools.liblog.LibLog.LogWriter;
+import com.mclarkdev.tools.liblog.LibLogMessage;
+
 public class LibLogGELF {
 
-	private static String logSource = "LibGL";
-	private static String logHost = "127.0.0.1";
-	private static int logPort = 5575;
+	private static boolean enabled = false;
+
+	private static String logHost;
+	private static int logPort;
 
 	private static Socket logSocket = null;
 
+	private static Set<JSONObject> messageCache;
+
 	static {
 
-		// Log Source
-		String gelfSource = System.getenv("LOG_GELF_SOURCE");
-		if (gelfSource != null) {
-			setLogSource(gelfSource);
-		}
+		// GELF log Server
+		String server = System.getenv("LOG_GELF_SERVER");
+		if (server != null) {
 
-		// Log Server
-		String gelfServer = System.getenv("LOG_GELF_SERVER");
-		if (gelfServer != null) {
-			String[] parts = gelfServer.split(":");
-			setLogHost(parts[0], Integer.parseInt(parts[1]));
+			// Initialize the logger
+			setupLogger(server);
 		}
 	}
 
-	/**
-	 * Set the log source.
-	 * 
-	 * @param host
-	 */
-	public static void setLogSource(String host) {
+	private static void setupLogger(String server) {
 
-		logSource = host;
+		try {
+			// Determine server address
+			String[] hostParts = server.split(":");
+			logPort = Integer.parseInt(hostParts[1]);
+			logHost = hostParts[0];
+		} catch (Exception e) {
+			enabled = false;
+			return;
+		}
+
+		// Setup log cache
+		messageCache = ConcurrentHashMap.newKeySet();
+
+		// Intercept log messages
+		LibLog.addLogger(new LogWriter() {
+
+			final String appName = LibLog.getAppName();
+
+			@Override
+			public void write(LibLogMessage message) {
+				messageCache.add(new JSONObject()//
+						.put("host", appName)//
+						.put("version", "1.1")//
+						.put("time", message.getTime())//
+						.put("stamp", message.getTimeStamp())//
+						.put("facility", message.getLoggedFacility())//
+						.put("message", message.getLoggedMessage())//
+						.put("throwable", message.getLoggedThrowableString())//
+						.put("className", message.getLoggedClassName())//
+						.put("classLine", message.getLoggedLineNumber()));
+			}
+		});
+
+		// Cache flushing thread
+		new Thread() {
+			public void run() {
+				while (true) {
+					try {
+						Thread.sleep(1000);
+						flushCache();
+					} catch (InterruptedException e) {
+						return;
+					}
+				}
+			}
+		}.start();
+
+		enabled = true;
+	}
+
+	public static boolean enabled() {
+		return enabled;
 	}
 
 	/**
-	 * Set the log server.
-	 * 
-	 * @param host
-	 * @param port
+	 * Flush any messages in the cache to the socket.
 	 */
-	public static void setLogHost(String host, int port) {
+	public static boolean flushCache() {
+		if (messageCache.size() == 0) {
+			return true;
+		}
 
-		logHost = host;
-		logPort = port;
-		connect(true);
+		for (JSONObject msg : messageCache) {
+			synchronized (msg) {
+				if (write(msg)) {
+					messageCache.remove(msg);
+				} else {
+					return false;
+				}
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -61,6 +119,12 @@ public class LibLogGELF {
 		return ((logSocket != null) && (logSocket.isConnected()));
 	}
 
+	/**
+	 * Connect to the remote logging server.
+	 * 
+	 * @param force Force a reconnect.
+	 * @return
+	 */
 	private static boolean connect(boolean force) {
 		if (connected() && !force) {
 			return true;
@@ -74,8 +138,8 @@ public class LibLogGELF {
 
 		} catch (IOException e) {
 
-			System.err.println("LibGL: Failed to connect.");
-			e.printStackTrace(System.err);
+			System.err.println(String.format(//
+					"LibLogGELF: Failed to connect (%s)", e.getMessage()));
 			return false;
 		}
 	}
@@ -121,81 +185,5 @@ public class LibLogGELF {
 			disconnect();
 			return false;
 		}
-	}
-
-	/**
-	 * Write a message to the log server.
-	 * 
-	 * @param message
-	 * @return
-	 */
-	public static boolean write(String message) {
-		return write(LibLogGELF.format(message, null, 1));
-	}
-
-	/**
-	 * Write a message to the log server.
-	 * 
-	 * @param message
-	 * @param longMessage
-	 * @return
-	 */
-	public static boolean write(String message, String longMessage) {
-		return write(LibLogGELF.format(message, longMessage, 1));
-	}
-
-	/**
-	 * Write a message to the log server.
-	 * 
-	 * @param message
-	 * @param longMessage
-	 * @param level
-	 * @return
-	 */
-	public static boolean write(String message, String longMessage, int level) {
-		return write(LibLogGELF.format(message, longMessage, level));
-	}
-
-	/**
-	 * Write a message to the log server.
-	 * 
-	 * @param message
-	 * @param longMessage
-	 * @param level
-	 * @param params
-	 * @return
-	 */
-	public static boolean write(String message, String longMessage, int level, String... params) {
-		if (params == null || params.length % 2 != 0) {
-			throw new IllegalArgumentException();
-		}
-
-		JSONObject gelf = LibLogGELF.format(message, longMessage, level);
-
-		for (int x = 0; x < params.length;) {
-			String key = params[x++];
-			String val = params[x++];
-
-			gelf.put("_" + key, val);
-		}
-
-		return write(gelf);
-	}
-
-	/**
-	 * Returns a JSON formatted GELF message.
-	 * 
-	 * @param shortMessage
-	 * @param fullMessage
-	 * @param level
-	 * @return
-	 */
-	public static JSONObject format(String shortMessage, String fullMessage, int level) {
-		return new JSONObject()//
-				.put("version", "1.1")//
-				.put("host", logSource)//
-				.put("level", level)//
-				.put("short_message", shortMessage)//
-				.put("full_message", fullMessage);
 	}
 }

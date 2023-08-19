@@ -1,0 +1,3 @@
+# License
+
+Free for everyone. ❤
