@@ -89,6 +89,10 @@ public class LibLogGELF {
 		return enabled;
 	}
 
+	public static int cacheSize() {
+		return messageCache.size();
+	}
+
 	/**
 	 * Flush any messages in the cache to the socket.
 	 */
@@ -139,7 +143,8 @@ public class LibLogGELF {
 		} catch (IOException e) {
 
 			System.err.println(String.format(//
-					"LibLogGELF: Failed to connect (%s)", e.getMessage()));
+					"LibLogGELF: Failed to connect\n - Host: %s\n -- (%s)\n - Messages cached: %d", //
+					(logHost + ":" + logPort), e.getMessage(), cacheSize()));
 			return false;
 		}
 	}
