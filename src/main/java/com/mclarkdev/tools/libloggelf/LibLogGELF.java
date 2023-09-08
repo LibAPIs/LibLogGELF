@@ -15,6 +15,8 @@ public class LibLogGELF {
 
 	private static boolean enabled = false;
 
+	private static String appName;
+
 	private static String logHost;
 	private static int logPort;
 
@@ -24,13 +26,19 @@ public class LibLogGELF {
 
 	static {
 
-		// GELF log Server
+		// Determine app name
+		appName = System.getenv("LOG_GELF_APP");
+
+		// GELF log server
 		String server = System.getenv("LOG_GELF_SERVER");
 		if (server != null) {
 
 			// Initialize the logger
 			setupLogger(server);
 		}
+
+		// Print app name
+		LibLog._logF("Logging as: %s", appName);
 	}
 
 	private static void setupLogger(String server) {
@@ -51,26 +59,30 @@ public class LibLogGELF {
 		// Intercept log messages
 		LibLog.addLogger(new LogWriter() {
 
-			final String appName = LibLog.getAppName();
-
 			@Override
-			public void write(LibLogMessage message) {
-				messageCache.add(new JSONObject()//
+			public void write(boolean debug, LibLogMessage message) {
+				JSONObject obj = (new JSONObject())//
 						.put("host", appName)//
 						.put("version", "1.1")//
 						.put("time", message.getTime())//
 						.put("stamp", message.getTimeStamp())//
 						.put("facility", message.getLoggedFacility())//
 						.put("message", message.getLoggedMessage())//
-						.put("throwable", message.getLoggedThrowableString())//
-						.put("className", message.getLoggedClassName())//
-						.put("classLine", message.getLoggedLineNumber()));
+						.put("throwable", message.getLoggedThrowableString());
+
+				if (debug) {
+					obj.put("className", message.getLoggedClassName());
+					obj.put("classLine", message.getLoggedLineNumber());
+				}
+
+				messageCache.add(obj);
 			}
 		});
 
 		// Cache flushing thread
 		new Thread() {
 			public void run() {
+				this.setName("LogSend");
 				while (true) {
 					try {
 						Thread.sleep(1000);
@@ -85,10 +97,29 @@ public class LibLogGELF {
 		enabled = true;
 	}
 
+	/**
+	 * Returns true if GELF logging is enabled.
+	 * 
+	 * @return
+	 */
 	public static boolean enabled() {
 		return enabled;
 	}
 
+	/**
+	 * Returns the name of the application sent to GELF server.
+	 * 
+	 * @return
+	 */
+	public static String getAppName() {
+		return appName;
+	}
+
+	/**
+	 * Returns the current number of messages in the cache.
+	 * 
+	 * @return
+	 */
 	public static int cacheSize() {
 		return messageCache.size();
 	}
