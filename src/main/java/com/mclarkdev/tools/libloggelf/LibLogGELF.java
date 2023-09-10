@@ -11,6 +11,11 @@ import com.mclarkdev.tools.liblog.LibLog;
 import com.mclarkdev.tools.liblog.LibLog.LogWriter;
 import com.mclarkdev.tools.liblog.LibLogMessage;
 
+/**
+ * LibLogGELF // LibLogGELF
+ * 
+ * An extension to LibLog, forwards log messages to configured GELF server.
+ */
 public class LibLogGELF {
 
 	private static boolean enabled = false;
@@ -41,6 +46,11 @@ public class LibLogGELF {
 		LibLog._logF("Logging as: %s", appName);
 	}
 
+	/**
+	 * Called by static initialization if GELF should be loaded.
+	 * 
+	 * @param server log server address
+	 */
 	private static void setupLogger(String server) {
 
 		try {

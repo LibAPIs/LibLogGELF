@@ -8,7 +8,7 @@
 
 	<groupId>com.mclarkdev.tools</groupId>
 	<artifactId>libloggelf</artifactId>
-	<version>1.5</version>
+	<version>1.5.1</version>
 	<packaging>jar</packaging>
 
 	<name>libloggelf</name>
@@ -95,7 +95,7 @@
 		<dependency>
 			<groupId>com.mclarkdev.tools</groupId>
 			<artifactId>liblog</artifactId>
-			<version>1.5</version>
+			<version>1.5.1</version>
 		</dependency>
 	</dependencies>
 </project>
