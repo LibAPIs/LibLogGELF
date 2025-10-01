@@ -13,19 +13,24 @@ import com.mclarkdev.tools.liblog.lib.LibLogMessage;
  */
 public class LibLogGELFLogWriter extends LibLogCachedLogWriter {
 
+	private final String appName;
+
 	public static String scheme() {
 		return "gelf";
 	}
 
 	public LibLogGELFLogWriter(URI uri) throws UnknownHostException {
 		super(uri, new LibLogGELFStream(uri));
+
+		String path = uri.getPath();
+		this.appName = (path != null) ? path.trim().substring(1) : "JavaApp";
 	}
 
 	@Override
 	public void write(LibLogMessage message) {
 
 		JSONObject obj = (new JSONObject())//
-				// .put("host", appName)//
+				.put("host", appName)//
 				.put("version", "0.1")//
 				.put("time", message.getTime())//
 				.put("stamp", message.getTimeStamp())//
