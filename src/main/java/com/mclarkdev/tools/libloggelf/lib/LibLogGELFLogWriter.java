@@ -31,7 +31,7 @@ public class LibLogGELFLogWriter extends LibLogCachedLogWriter {
 
 		JSONObject obj = (new JSONObject())//
 				.put("host", appName)//
-				.put("version", "0.1")//
+				.put("version", "1.1")//
 				.put("time", message.getTime())//
 				.put("stamp", message.getTimeStamp())//
 				.put("facility", message.getLoggedFacility())//
